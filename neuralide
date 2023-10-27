@@ -1,18 +1,38 @@
 #!/bin/bash
 
-echo "Welcome to NeuralIDE! (type 'exit' to end)"
-while :; do
-    read -p "Context/Goal: " user_input
-    [[ "$user_input" == "exit" ]] && echo "Goodbye!" && exit
+TMP_FILE="/tmp/neuralide_tmp.txt"
 
-    ai_proposal=$(toolbuilder --mode=code --input="$user_input")
-    echo -e "\nAI Proposal:\n$ai_proposal"
+editflow_refine() {
+    echo "$1" > "$TMP_FILE"
+    nvim "$TMP_FILE"  # Opens the file in neovim, and waits for it to be closed
+    cat "$TMP_FILE"
+}
 
-    read -p "Review [Y/N/Modify]: " user_review
-    case $user_review in
-        [yY]* ) echo "Accepted!";;
-        [nN]* ) echo "Rejected.";;
-        [mM]* ) read -p "Modifications: " user_modifications && echo "Modified code: $user_modifications";;
-        * ) echo "Invalid option.";;
-    esac
+while true; do
+    echo "Enter your context or goal:"
+    read -r user_query
+    response=$(toolbuilder --mode=assistant --input="$user_query")
+    refined_response=$(editflow_refine "$response")
+
+    # Act on the refined response, which might contain code or a new user prompt
+    if [[ $refined_response == run:* ]]; then
+        command_to_run=${refined_response#run:}
+        eval "$command_to_run"
+    elif [[ $refined_response == save:* ]]; then
+        file_content=${refined_response#save:}
+        echo "Enter path to save:"
+        read -r path
+        echo "$file_content" > "$path"
+    elif [[ $refined_response == prompt:* ]]; then
+        next_prompt=${refined_response#prompt:}
+        echo "$next_prompt"
+        read -r user_response
+        echo "Your response was: $user_response"
+    else
+        echo "$refined_response"
+    fi
+
+    echo "Continue? (yes/no)"
+    read -r cont
+    [ "$cont" == "no" ] && break
 done
