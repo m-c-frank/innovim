@@ -1,38 +1,52 @@
 #!/bin/bash
 
-TMP_FILE="/tmp/neuralide_tmp.txt"
+TMP_FILE="/tmp/neuralidea_tmp.txt"
 
-editflow_refine() {
+# Function to refine AI response using neovim
+refine_response() {
     echo "$1" > "$TMP_FILE"
-    nvim "$TMP_FILE"  # Opens the file in neovim, and waits for it to be closed
+    nvim "$TMP_FILE" 
     cat "$TMP_FILE"
 }
 
-while true; do
-    echo "Enter your context or goal:"
+# Handle commands based on AI response prefix (run:, save:, prompt:)
+handle_response() {
+    local response="$1"
+    case "$response" in
+        run:*)
+            command_to_run=${response#run:}
+            eval "$command_to_run"
+            ;;
+        save:*)
+            file_content=${response#save:}
+            echo "Enter path to save:"
+            read -r path
+            echo "$file_content" > "$path"
+            ;;
+        prompt:*)
+            next_prompt=${response#prompt:}
+            echo "$next_prompt"
+            read -r user_response
+            echo "Your response was: $user_response"
+            ;;
+        *)
+            echo "$response"
+            ;;
+    esac
+}
+
+# Main interaction loop
+neural_interaction() {
+    echo "Enter your context or goal (or 'exit' to quit):"
     read -r user_query
+    [ "$user_query" == "exit" ] && return 0
+
     response=$(toolbuilder --mode=assistant --input="$user_query")
-    refined_response=$(editflow_refine "$response")
+    refined_response=$(refine_response "$response")
 
-    # Act on the refined response, which might contain code or a new user prompt
-    if [[ $refined_response == run:* ]]; then
-        command_to_run=${refined_response#run:}
-        eval "$command_to_run"
-    elif [[ $refined_response == save:* ]]; then
-        file_content=${refined_response#save:}
-        echo "Enter path to save:"
-        read -r path
-        echo "$file_content" > "$path"
-    elif [[ $refined_response == prompt:* ]]; then
-        next_prompt=${refined_response#prompt:}
-        echo "$next_prompt"
-        read -r user_response
-        echo "Your response was: $user_response"
-    else
-        echo "$refined_response"
-    fi
+    handle_response "$refined_response"
 
-    echo "Continue? (yes/no)"
-    read -r cont
-    [ "$cont" == "no" ] && break
-done
+    neural_interaction
+}
+
+neural_interaction
