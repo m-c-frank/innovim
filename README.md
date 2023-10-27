@@ -1,85 +1,48 @@
-# NeuralIDE(a) 🧠🛠️
+# neuralIDE(a) 🧠🛠️
 
-Welcome to `neuralidea`, a groundbreaking neural CLI tool for dynamic AI-powered development. Whether you're delving into intricate challenges or brainstorming creative endeavors, `neuralidea` stands by you, facilitating an immediate, interactive, and refined AI-assistance.
+Elevate your development journey with `neuralIDE(a)`, the intuitive neural command-line tool. It dynamically integrates with AI, letting you interact, refine responses using `EditFlow`, and immediately execute them.
 
-Channel your vision, fine-tune neural responses on-the-fly with EditFlow, and bring your ideas to life seamlessly.
+## 🚀 Quick Start
 
----
-
-## Features 🌟
-
-### 1. Real-time AI Assistance 🔄
-Dive into an instantaneous, AI-enhanced development cycle. Adapt and evolve your projects as you proceed.
-
-### 2. Direct Neural Interaction 🧠
-Harness state-of-the-art neural models for in-depth, human-like engagement. Extract content, navigate contexts, and delve into dynamic interactions.
-
-### 3. CLI Mastery 🖥️
-Interact through an intuitive command-line interface, tailored for your exploration, refinements, and questions.
-
-### 4. On-the-Go Refinement with EditFlow 📝
-Modify AI responses in real-time using EditFlow, ensuring the output aligns perfectly with your needs.
-
----
-
-## Dive Deep: How neuralidea Works
-
-`neuralidea` functions as the nexus between your vision and its execution. Dive into an interactive cycle where user queries are metamorphosed into refined, actionable AI insights.
-
-For instance:
-
-```bash
-neuralidea "what's the next asymptotically simplest way to solve the problem xy?"
-```
-
----
-
-## Get Started
-
-### Structure:
-```bash
-.
-├── LICENSE.md
-├── README.md
-└── neuralidea
-```
-
-### Installation & Usage 🛠️
-
-1. **Clone** and navigate to the directory:
+1. **Clone the Repository**:
    ```bash
    git clone https://github.com/m-c-frank/neuralidea.git
    cd neuralidea
    ```
 
-2. **Add the tool to your path** (For Artix Linux users):
-
-   Ensure `neuralidea` is accessible globally by moving it to a directory in your system's PATH:
-
+2. **Make It Globally Available**:
    ```bash
-   sudo mv neuralidea /usr/local/bin/
+   sudo cp neuralidea /usr/local/bin/
    ```
 
-3. **Engage** with `neuralidea`:
-
-   Embark on your AI-infused exploration by entering:
-
+3. **Run**:
    ```bash
    neuralidea
    ```
 
+4. **Interact**:
+   Simply enter your context or goal when prompted. For example:
+   ```bash
+   neuralidea "what's the next step to enhance project X?"
+   ```
+
+5. Responses from the tool can be dynamically refined. They can be:
+   - Commands to run (`run:` prefix)
+   - Files to save (`save:` prefix)
+   - New prompts to respond to (`prompt:` prefix)
+
+6. To quit, type `exit`.
+
+## 💡 Tips
+
+- Use the `neuralidea` tool as a brainstorming session with AI.
+- Refine the AI suggestions directly in the provided editor before executing them.
+- Discover new solutions, integrate dynamic code snippets, or get AI perspectives on various challenges.
+
+## 🤝 Contribute
+
+Feedback and contributions are highly appreciated! Feel the power of `neuralIDE(a)` and shape its future.
+
 ---
 
-## Evolve With Us 🌱
-
-Your insights and feedback are invaluable. Spotted a potential enhancement? Harbor a revolutionary concept? Be part of our evolution! Share issues, propose features, or contribute through a pull request. Together, we innovate.
-
----
-
-### Credits & Acknowledgements 🙏
-
-Pioneered with passion by [Martin Christoph Frank](https://github.com/m-c-frank). Need guidance or wish to share feedback? 💌 [martin7.frank7@gmail.com](martin7.frank7@gmail.com)
-
----
-
-🔓 **License**: Explore our [GOS License](https://github.com/m-c-frank/neuralidea/blob/main/LICENSE.md) to fathom the ethos of `neuralidea` within the open-source universe.
+🔓 **License**: Check our [GOS License](https://github.com/m-c-frank/neuralidea/blob/main/LICENSE.md) to explore more about `neuralIDE(a)`'s open-source essence.
