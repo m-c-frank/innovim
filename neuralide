@@ -1,0 +1,18 @@
+#!/bin/bash
+
+echo "Welcome to NeuralIDE! (type 'exit' to end)"
+while :; do
+    read -p "Context/Goal: " user_input
+    [[ "$user_input" == "exit" ]] && echo "Goodbye!" && exit
+
+    ai_proposal=$(toolbuilder --mode=code --input="$user_input")
+    echo -e "\nAI Proposal:\n$ai_proposal"
+
+    read -p "Review [Y/N/Modify]: " user_review
+    case $user_review in
+        [yY]* ) echo "Accepted!";;
+        [nN]* ) echo "Rejected.";;
+        [mM]* ) read -p "Modifications: " user_modifications && echo "Modified code: $user_modifications";;
+        * ) echo "Invalid option.";;
+    esac
+done
