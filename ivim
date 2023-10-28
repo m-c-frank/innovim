@@ -1,52 +1,41 @@
 #!/bin/bash
 
-TMP_FILE="/tmp/neuralidea_tmp.txt"
+TMP_FILE="/tmp/ivim_buffer.txt"
 
-# Function to refine AI response using neovim
 refine_response() {
     echo "$1" > "$TMP_FILE"
-    nvim "$TMP_FILE" 
+    nvim "$TMP_FILE"
     cat "$TMP_FILE"
 }
 
-# Handle commands based on AI response prefix (run:, save:, prompt:)
 handle_response() {
     local response="$1"
     case "$response" in
-        run:*)
-            command_to_run=${response#run:}
-            eval "$command_to_run"
-            ;;
+        run:*) eval "${response#run:}" ;;
         save:*)
-            file_content=${response#save:}
-            echo "Enter path to save:"
+            echo "Enter save path:"
             read -r path
-            echo "$file_content" > "$path"
+            echo "${response#save:}" > "$path"
             ;;
         prompt:*)
-            next_prompt=${response#prompt:}
-            echo "$next_prompt"
+            echo "${response#prompt:}"
             read -r user_response
-            echo "Your response was: $user_response"
+            echo "You said: $user_response"
             ;;
-        *)
-            echo "$response"
-            ;;
+        *) echo "$response" ;;
     esac
 }
 
-# Main interaction loop
-neural_interaction() {
-    echo "Enter your context or goal (or 'exit' to quit):"
-    read -r user_query
-    [ "$user_query" == "exit" ] && return 0
+interact() {
+    echo "Provide context/goal or type 'exit' to quit:"
+    read -r user_input
+    [ "$user_input" == "exit" ] && exit 0
 
-    response=$(toolbuilder --mode=assistant --input="$user_query")
-    refined_response=$(refine_response "$response")
+    response=$(toolbuilder --mode=assistant --input="$user_input")
+    refined=$(refine_response "$response")
+    handle_response "$refined"
 
-    handle_response "$refined_response"
-
-    neural_interaction
+    interact
 }
 
-neural_interaction
+interact
