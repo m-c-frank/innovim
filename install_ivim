@@ -1,12 +1,10 @@
 sudo rm /usr/local/bin/actionhandler
 sudo rm /usr/local/bin/commandrouter
 sudo rm /usr/local/bin/convoupdater
-sudo rm /usr/local/bin/easylog
 sudo rm /usr/local/bin/editbuf
 sudo rm /usr/local/bin/ivim
 sudo cp actionhandler /usr/local/bin
 sudo cp commandrouter /usr/local/bin
 sudo cp convoupdater /usr/local/bin
-sudo cp easylog /usr/local/bin
 sudo cp editbuf /usr/local/bin
 sudo cp ivim /usr/local/bin/
