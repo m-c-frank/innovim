@@ -1,15 +1,18 @@
 #!/bin/bash
 
 # Default allowed tools
-allowed_tools="git ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker"
+allowed_tools="git tree ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker"
 
 # Function to check if a tool is allowed
 is_allowed_tool() {
-  if grep -q "^$1\$" <<< "$allowed_tools"; then
-    return 0  # true, the tool is allowed
-  else
-    return 1  # false, the tool is not allowed
-  fi
+  local tool="$1"
+  IFS=' ' read -ra allowed <<< "$allowed_tools"
+  for t in "${allowed[@]}"; do
+    if [[ "$t" == "$tool" ]]; then
+      return 0  # true, the tool is allowed
+    fi
+  done
+  return 1  # false, the tool is not allowed
 }
 
 # Function to execute or echo a command
@@ -17,7 +20,7 @@ execute_or_echo() {
   read -r command args <<< "$@"
   if is_allowed_tool "$command"; then
     # Execute the command in a new shell instance
-    echo "Running command: $command $args"
+    echo "Running command: $command with arguments $args;\nOutput:"
     bash -c "$command $args"
   else
     # If not recognized or not allowed, just echo back the input

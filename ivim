@@ -57,12 +57,10 @@ is_allowed_tool() {
   fi
 }
 
-
-
 process_commands() {
   local content="$1"
   # Ensure the commandrouter script is in PATH or provide the full path to the script
-  local output=$(commandrouter "$content")
+  local output=$(commandrouter "$content" 2>&1) # Capture standard error as well
   log DEBUG "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
   echo "$output"
 }
