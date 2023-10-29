@@ -4,39 +4,13 @@
 CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
 VERBOSITY=0
 
-allowed_tools="git ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker"
-
-# Logging function
-log() {
-  local level="$1"
-  local message="$2"
-  local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-  case "$level" in
-    DEBUG)
-      [[ $VERBOSITY -ge 3 ]] && echo "$timestamp [DEBUG] $message"
-      ;;
-    INFO)
-      [[ $VERBOSITY -ge 2 ]] && echo "$timestamp [INFO] $message"
-      ;;
-    WARN)
-      [[ $VERBOSITY -ge 1 ]] && echo "$timestamp [WARN] $message"
-      ;;
-    ERROR)
-      echo "$timestamp [ERROR] $message"
-      ;;
-    *)
-      echo "$timestamp [UNKNOWN] Unknown log level: $level"
-      ;;
-  esac
-}
-
 # Help message
 show_help() {
   cat << EOF
 Usage: ivim [options]
 Options:
   -h        Show help message.
-  -v        Increase verbosity of log messages.
+  -v        Increase verbosity of easylog messages.
   -f FILE   Specify a conversation file.
 EOF
 }
@@ -48,20 +22,11 @@ append_to_conversation() {
   jq --arg role "$role" --arg content "$content" '. += [{"role": $role, "content": $content}]' "$CONVERSATION_FILE" > temp.json && mv temp.json "$CONVERSATION_FILE"
 }
 
-
-is_allowed_tool() {
-  if grep -q "^$1\$" <<< "$allowed_tools"; then
-    return 0  # true, the tool is allowed
-  else
-    return 1  # false, the tool is not allowed
-  fi
-}
-
 process_commands() {
   local content="$1"
   # Ensure the commandrouter script is in PATH or provide the full path to the script
   local output=$(commandrouter "$content" 2>&1) # Capture standard error as well
-  log DEBUG "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
+  elog DEBUG "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
   echo "$output"
 }
 
@@ -76,7 +41,7 @@ process_response() {
   
   # Get the response from brainbridge
   local response=$(brainbridge --conversation "$conversation_json")
-  log DEBUG "Brainbridge response: $response"
+  elog DEBUG "Brainbridge response: $response"
 
   # Extract the response content from the JSON
   local response_content=$(echo "$response" | jq -r '.[0].content')
@@ -86,7 +51,7 @@ process_response() {
   
   # Read the edited response content back into a variable
   local refined_content=$(<"$temp_file")
-  log INFO "Refined content: $refined_content"
+  elog INFO "Refined content: $refined_content"
 
   processed_content=$(process_commands "$refined_content")
   
@@ -102,20 +67,20 @@ process_response() {
 
 # Main interaction loop
 interact() {
-  log INFO "Interaction loop started."
+  elog INFO "Interaction loop started."
   while true; do
     echo "Provide your command (type 'exit' to quit):"
     read -r user_input
-    log INFO "User input: $user_input"
+    elog INFO "User input: $user_input"
     
     if [[ "$user_input" == "exit" ]]; then
-      log INFO "User requested to exit."
+      elog INFO "User requested to exit."
       break
     fi
 
     process_response "$user_input"
   done
-  log INFO "Interaction loop ended."
+  elog INFO "Interaction loop ended."
 }
 
 # Parse command-line options
@@ -130,13 +95,13 @@ done
 
 # Check for conversation file existence or create it with an initial system message
 if [ ! -f "$CONVERSATION_FILE" ]; then
-  log INFO "Creating a new conversation file."
+  elog INFO "Creating a new conversation file."
   echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
-  log INFO "Conversation file initialized at $CONVERSATION_FILE"
+  elog INFO "Conversation file initialized at $CONVERSATION_FILE"
 else
-  log INFO "Using existing conversation file at $CONVERSATION_FILE"
+  elog INFO "Using existing conversation file at $CONVERSATION_FILE"
 fi
 
 # Start the interaction loop
-log INFO "Starting ivim script."
+elog INFO "Starting ivim script."
 interact

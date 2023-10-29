@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default allowed tools
-allowed_tools="git tree ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker"
+allowed_tools="git tree ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker cat"
 
 # Function to check if a tool is allowed
 is_allowed_tool() {

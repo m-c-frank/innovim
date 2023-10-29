@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Define the elog (easy log) function
+elog() {
+  local level="$1"
+  local message="$2"
+  local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+  local verbosity=${VERBOSITY:-0}  # Default to 0 if not set
+
+  case "$level" in
+    DEBUG)
+      [[ $verbosity -ge 3 ]] && echo "$timestamp [DEBUG] $message"
+      ;;
+    INFO)
+      [[ $verbosity -ge 2 ]] && echo "$timestamp [INFO] $message"
+      ;;
+    WARN)
+      [[ $verbosity -ge 1 ]] && echo "$timestamp [WARN] $message"
+      ;;
+    ERROR)
+      echo "$timestamp [ERROR] $message"
+      ;;
+    *)
+      echo "$timestamp [UNKNOWN] Unknown log level: $level"
+      ;;
+  esac
+}
