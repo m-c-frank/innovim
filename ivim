@@ -1,88 +1,83 @@
 #!/bin/bash
 
-TMP_FILE="/tmp/ivim_buffer.txt"
+# Default file paths
 CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
-VERBOSITY=0
+TMP_FILE="/tmp/ivim_buffer.txt"
 
-# Logging function
-log() {
-  local level="$1"
-  local message="$2"
-  local level_num
+# Help message
+show_help() {
+  cat << EOF
+Usage: innovim [options]
+Options:
+  -h        Show help message.
+  -v        Increase verbosity of log messages.
+  -f FILE   Specify a conversation file.
+EOF
+}
 
-  case "$level" in
-    ERROR) level_num=0 ;;
-    WARN)  level_num=1 ;;
-    INFO)  level_num=2 ;;
-    DEBUG) level_num=3 ;;
-    *)     echo "Unknown log level: $level"; exit 1 ;;
-  esac
+# Update conversation file with new entry
+update_conversation() {
+  local role="$1"
+  local content="$2"
+  jq --arg content "$content" '. += [{"role": "'$role'", "content": $content}]' "$CONVERSATION_FILE" > tmp.$$ && mv tmp.$$ "$CONVERSATION_FILE"
+}
 
-  if [[ $VERBOSITY -ge $level_num ]]; then
-    echo "[$level] $message"
+# Handle command with router and action handler
+handle_command() {
+  local input="$1"
+  local cmd_identifier=$(commandrouter "$input")
+  if [[ "$cmd_identifier" != "unknown" ]]; then
+    actionhandler "$cmd_identifier" "$input"
+  else
+    echo "$input"
   fi
-}
-
-# Parse options for verbosity level
-while getopts "v" opt; do
-    case $opt in
-        v) VERBOSITY=$((VERBOSITY+1)) ;;
-        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
-    esac
-done
-
-# Function to initialize the conversation file if it doesn't exist
-initialize_conversation() {
-    log INFO "Initializing conversation file."
-    echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
-    log DEBUG "Conversation file content initialized."
-}
-
-# Function to route command through the Command Router
-route_command() {
-    local user_input="$1"
-    echo "$user_input" | commandrouter
-}
-
-# Function to invoke the appropriate microservice based on the route
-invoke_service() {
-    local service_name="$1"
-    local command="$2"
-    "/path/to/${service_name}" "$command"
 }
 
 # Main interaction loop
 interact() {
-    if [ ! -f "$CONVERSATION_FILE" ]; then
-        log WARN "Conversation file not found."
-        initialize_conversation
+  while true; do
+    echo "Provide your command (type 'exit' to quit):"
+    read -r user_input
+    [[ "$user_input" == "exit" ]] && { logger -p user.info "Exiting."; break; }
+
+    # Handle immediate commands or update conversation
+    output=$(handle_command "$user_input")
+    if [[ "$output" != "$user_input" ]]; then
+      logger -p user.info "Command output: $output"
+      continue
     fi
+    update_conversation "user" "$user_input"
 
-    while true; do
-        log INFO "Provide your message or type 'exit' to quit:"
-        read -r user_input
-        log DEBUG "Read user input: $user_input"
+    # Get and refine assistant's response
+    response=$(brainbridge --conversation "$CONVERSATION_FILE")
+    echo "$response" > "$TMP_FILE"
+    nvim "$TMP_FILE"
+    refined_response=$(<"$TMP_FILE")
 
-        if [[ "$user_input" == "exit" ]]; then
-            log INFO "Exiting."
-            break
-        fi
-
-        log DEBUG "Routing command through the Command Router."
-        service_name=$(route_command "$user_input")
-
-        log DEBUG "Invoking the $service_name service."
-        response=$(invoke_service "$service_name" "$user_input")
-        log DEBUG "Service response: $response"
-
-        log DEBUG "Appending user input and response to conversation."
-        conversation_json=$(<"$CONVERSATION_FILE")
-        updated_conversation=$(echo "$conversation_json" | jq --arg user_input "$user_input" --arg response "$response" '. += [{"role": "user", "content": $user_input}, {"role": "assistant", "content": $response}]')
-        echo "$updated_conversation" > "$CONVERSATION_FILE"
-        log DEBUG "Updated conversation saved to file."
-    done
+    # Handle refined response or update conversation
+    output=$(handle_command "$refined_response")
+    if [[ "$output" == "$refined_response" ]]; then
+      update_conversation "assistant" "$refined_response"
+    fi
+    logger -p user.info "Assistant's response: $refined_response"
+  done
 }
 
-# Start the main interaction loop
-log INFO "Starting interaction loop."
+# Parse command-line options
+while getopts "vhf:" opt; do
+  case $opt in
+    v) VERBOSITY=$((VERBOSITY+1)) ;;
+    h) show_help; exit 0 ;;
+    f) CONVERSATION_FILE="$OPTARG" ;;
+    *) show_help >&2; exit 1 ;;
+  esac
+done
+
+# Check for conversation file existence or create it
+if [ ! -f "$CONVERSATION_FILE" ]; then
+  echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
+  logger -p user.info "Conversation file initialized at $CONVERSATION_FILE"
+fi
+
+# Start the interaction loop
 interact

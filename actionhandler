@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# The first argument is the action, and the rest are parameters for the action.
+action=$1
+shift
+
+case "$action" in
+  save)
+    # Use 'tee' to save text to a file. Expects file path as parameter.
+    tee "$1"
+    ;;
+  exec)
+    # Use 'bash' or 'sh' to execute a CLI command. Expects command string as parameters.
+    /bin/bash -c "$*"
+    ;;
+  log)
+    # Use 'tee -a' to append text to a log file. Expects file path as parameter.
+    tee -a "$1"
+    ;;
+  read)
+    # Use 'cat' to read and display the content of a file. Expects file path as parameter.
+    cat "$1"
+    ;;
+  edit)
+    # Use 'vim' or 'nano' to open text in an editor for modification. Expects file path as parameter.
+    vim "$1"
+    ;;
+  *)
+    echo "Unknown action: $action"
+    exit 1
+    ;;
+esac

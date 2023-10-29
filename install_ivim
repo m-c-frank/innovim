@@ -1,2 +1,3 @@
 sudo cp ivim /usr/local/bin/
 sudo cp commandrouter /usr/local/bin
+sudo cp actionhandler /usr/local/bin
