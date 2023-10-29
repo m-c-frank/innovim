@@ -57,27 +57,15 @@ is_allowed_tool() {
   fi
 }
 
-execute_or_echo_command() {
-  read -r command args <<< "$@"
-  if $is_allowed; then
-    # Execute the command in a new shell instance
-    log DEBUG "Executing command: $command $args"
-    bash -c "$command $args"
-  else
-    # If not recognized, just echo back the input
-    echo "$@"
-  fi
-}
 
 
-# Replace the process_commands function with the new execute_or_echo_command
 process_commands() {
   local content="$1"
-  local output=$(execute_or_echo_command "$content")
-  echo "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
+  # Ensure the commandrouter script is in PATH or provide the full path to the script
+  local output=$(commandrouter "$content")
+  log DEBUG "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
   echo "$output"
 }
-
 
 process_response() {
   local user_input="$1"

@@ -1,42 +1,34 @@
 #!/bin/bash
 
-# commandrouter
-# A minimalistic command router for software development tools.
+# Default allowed tools
+allowed_tools="git ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker"
 
-# Define a newline-separated list of allowed tools.
-read -r -d '' allowed_tools << EOM
-git
-ls
-mkdir
-tee
-touch
-rm
-cp
-mv
-chmod
-chown
-wget
-curl
-python
-pip
-docker
-EOM
-
-# Function to check if the command is in the list of allowed tools
+# Function to check if a tool is allowed
 is_allowed_tool() {
-  grep -q "^$1\$" <<< "$allowed_tools"
-}
-
-execute_command() {
-  local command=$1
-  shift # Shift the arguments so that $@ contains only the remaining args
-
-  if is_allowed_tool "$command"; then
-    $command "$@" # Use $@ to pass all remaining arguments to the command
+  if grep -q "^$1\$" <<< "$allowed_tools"; then
+    return 0  # true, the tool is allowed
   else
-    echo "$command $@" # Echo back the command followed by all its arguments
+    return 1  # false, the tool is not allowed
   fi
 }
 
-# Now use "$@" to pass all arguments to the execute_command function
-execute_command "$@"
+# Function to execute or echo a command
+execute_or_echo() {
+  read -r command args <<< "$@"
+  if is_allowed_tool "$command"; then
+    # Execute the command in a new shell instance
+    echo "Running command: $command $args"
+    bash -c "$command $args"
+  else
+    # If not recognized or not allowed, just echo back the input
+    echo "$@"
+  fi
+}
+
+# Main execution flow
+if [ -z "$1" ]; then
+  echo "No command specified."
+  exit 1
+fi
+
+execute_or_echo "$@"
