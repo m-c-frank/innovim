@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Initialize default verbosity
+VERBOSITY=0
+
+# Help message
+show_help() {
+  cat << EOF
+Usage: $(basename "$0") [options]
+Options:
+  -h        Show help message.
+  -v        Increase verbosity of log messages.
+  -d DIR    Specify a conversation directory (mandatory).
+EOF
+}
+
+# Initialize or verify the conversation directory
+initialize_conversation_directory() {
+  local dir=$1
+  if [ ! -d "$dir" ]; then
+    mkdir -p "$dir" && elog INFO "Conversation directory initialized at $dir"
+  else
+    elog INFO "Using existing conversation directory at $dir"
+  fi
+}
+
+# Function to create a new file with a message in the conversation directory
+add_message() {
+  local role=$1
+  local content=$2
+  local dir=$3
+  local index=$(find "$dir" -type f -name '*.txt' | wc -l)
+  ((index++)) # Increment file index
+
+  printf "%s" "$content" > "${dir}/$(printf "%03d" "$index")_${role}.txt"
+  elog INFO "New file generated for role: $role"
+}
+
+# Function to generate a JSON array of messages from the conversation files
+generate_json_conversation() {
+  local dir=$1
+  local json_array="["
+
+  # Sort files by index and role
+  local sorted_files=($(find "$dir" -type f -name '*.txt' -print0 | sort -z -t_ -k1n,1))
+  
+  for file in "${sorted_files[@]}"; do
+    local basename=${file##*/}
+    local role=${basename#*_}
+    role=${role%.*}
+    local content=$(<"$file")
+    
+    # Append to JSON array
+    json_array+="{\"role\": \"$role\", \"content\": $(jq -Rs . <<< "$content")},"
+  done
+  
+  json_array="${json_array%,}]"
+  echo "$json_array" > "$dir/conversation.json"
+  elog INFO "JSON conversation generated"
+}
+
+# Main function
+main() {
+  local CONVERSATION_DIR
+
+  # Parse command-line options
+  while getopts "vh:d:" opt; do
+    case $opt in
+      v) VERBOSITY=$((VERBOSITY+1)) ;;
+      h) show_help; exit 0 ;;
+      d) CONVERSATION_DIR="$OPTARG" ;;
+      *) show_help >&2; exit 1 ;;
+    esac
+  done
+
+  if [[ -z "$CONVERSATION_DIR" ]]; then
+    elog ERROR "No conversation directory specified."
+    show_help >&2
+    exit 1
+  fi
+
+  initialize_conversation_directory "$CONVERSATION_DIR"
+  generate_json_conversation "$CONVERSATION_DIR"
+}
+
+# Invoke the main function with all the arguments
+main "$@"
