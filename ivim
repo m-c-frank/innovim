@@ -3,11 +3,37 @@
 # Default file paths
 CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
 TMP_FILE="/tmp/ivim_buffer.txt"
+VERBOSITY=0
+
+# Logging function
+log() {
+  local level="$1"
+  local message="$2"
+  local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+  case "$level" in
+    DEBUG)
+      [[ $VERBOSITY -ge 3 ]] && echo "$timestamp [DEBUG] $message"
+      ;;
+    INFO)
+      [[ $VERBOSITY -ge 2 ]] && echo "$timestamp [INFO] $message"
+      ;;
+    WARN)
+      [[ $VERBOSITY -ge 1 ]] && echo "$timestamp [WARN] $message"
+      ;;
+    ERROR)
+      echo "$timestamp [ERROR] $message"
+      ;;
+    *)
+      echo "$timestamp [UNKNOWN] Unknown log level: $level"
+      ;;
+  esac
+}
 
 # Help message
 show_help() {
   cat << EOF
-Usage: innovim [options]
+Usage: ivim [options]
 Options:
   -h        Show help message.
   -v        Increase verbosity of log messages.
@@ -20,52 +46,56 @@ update_conversation() {
   local role="$1"
   local content="$2"
   jq --arg content "$content" '. += [{"role": "'$role'", "content": $content}]' "$CONVERSATION_FILE" > tmp.$$ && mv tmp.$$ "$CONVERSATION_FILE"
+  log DEBUG "Conversation updated with: role=$role, content=$content"
 }
 
 # Handle command with router and action handler
 handle_command() {
   local input="$1"
-  local cmd_identifier=$(commandrouter "$input")
-  if [[ "$cmd_identifier" != "unknown" ]]; then
-    actionhandler "$cmd_identifier" "$input"
-  else
-    echo "$input"
-  fi
+  log DEBUG "Handling command: $input"
+  # Assuming actionhandler is in the PATH or provide the full path to actionhandler script
+  actionhandler "$@"
 }
 
 get_response(){
   local conversation_json=$(<"$CONVERSATION_FILE")
+  log DEBUG "Getting response with conversation: $conversation_json"
   echo "$(brainbridge --conversation "$conversation_json")"
 }
 
 # Main interaction loop
 interact() {
+  log INFO "Interaction loop started."
   while true; do
     echo "Provide your command (type 'exit' to quit):"
     read -r user_input
-    [[ "$user_input" == "exit" ]] && { logger -p user.info "Exiting."; break; }
-
-    # Handle immediate commands or update conversation
-    output=$(handle_command "$user_input")
-    if [[ "$output" != "$user_input" ]]; then
-      logger -p user.info "Command output: $output"
-      continue
+    log INFO "User input: $user_input"
+    if [[ "$user_input" == "exit" ]]; then
+      log INFO "User requested to exit."
+      break
     fi
+
+    log DEBUG "Processing user input."
+    output=$(handle_command $user_input) # Input is passed without quotes to allow actionhandler to split it into arguments
+    if [[ "$output" ]]; then
+      log INFO "Command output processed: $output"
+    fi
+
+    log DEBUG "Updating conversation with user input."
     update_conversation "user" "$user_input"
 
-    # Get and refine assistant's response
+    log DEBUG "Fetching and processing response."
     response=$(get_response)
     echo "$response" > "$TMP_FILE"
     nvim "$TMP_FILE"
     refined_response=$(<"$TMP_FILE")
 
-    # Handle refined response or update conversation
-    output=$(handle_command "$refined_response")
-    if [[ "$output" == "$refined_response" ]]; then
-      update_conversation "assistant" "$refined_response"
-    fi
-    logger -p user.info "Assistant's response: $refined_response"
+    log DEBUG "Refined response processed."
+    handle_command $refined_response # Similarly, input is passed without quotes
+
+    log INFO "Assistant's response: $refined_response"
   done
+  log INFO "Interaction loop ended."
 }
 
 # Parse command-line options
@@ -80,9 +110,13 @@ done
 
 # Check for conversation file existence or create it
 if [ ! -f "$CONVERSATION_FILE" ]; then
+  log INFO "Creating a new conversation file."
   echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
-  logger -p user.info "Conversation file initialized at $CONVERSATION_FILE"
+  log INFO "Conversation file initialized at $CONVERSATION_FILE"
+else
+  log INFO "Using existing conversation file at $CONVERSATION_FILE"
 fi
 
 # Start the interaction loop
+log INFO "Starting ivim script."
 interact

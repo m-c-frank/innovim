@@ -1,14 +1,38 @@
 #!/bin/bash
 
-# Reads command from arguments
-command=$1
+# This function will perform an action based on the rest of the string
+perform_action() {
+    local action=$1
+    shift # Shift the arguments to the left, removing the first one
+    local rest_of_string="$*"
+    echo "$action on '$rest_of_string'"
+}
 
-# Outputs the command identifier based on the input
+# Reads the command as the first word of the input string
+read -ra ADDR <<< "$1" # Split input into an array
+command=${ADDR[0]} # The command is the first element
+
+# Create a string of the remaining elements
+rest_of_string="${ADDR[@]:1}" # All elements except the first one
+
+# Outputs the command identifier based on the input and performs the action on the rest of the string
 case "$command" in
-    save) echo "save" ;;
-    exec) echo "exec" ;;
-    log) echo "log" ;;
-    read) echo "read" ;;
-    edit) echo "edit" ;;
-    *) echo "unknown" ;;
+    save)
+        perform_action "save" "$rest_of_string"
+        ;;
+    exec)
+        perform_action "execute" "$rest_of_string"
+        ;;
+    log)
+        perform_action "log" "$rest_of_string"
+        ;;
+    read)
+        perform_action "read" "$rest_of_string"
+        ;;
+    edit)
+        perform_action "edit" "$rest_of_string"
+        ;;
+    *)
+        echo "unknown"
+        ;;
 esac
