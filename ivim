@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Default file paths
-CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
+# Default directory path for conversation
+CONVERSATION_DIR="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S")"
 VERBOSITY=0
 
 # Help message
@@ -11,59 +11,66 @@ Usage: ivim [options]
 Options:
   -h        Show help message.
   -v        Increase verbosity of easylog messages.
-  -f FILE   Specify a conversation file.
+  -d DIR    Specify a conversation directory.
 EOF
 }
 
-# Function to append a message to the conversation
+# Function to append a message to the conversation using convmanager
 append_to_conversation() {
   local role="$1"
   local content="$2"
-  jq --arg role "$role" --arg content "$content" '. += [{"role": $role, "content": $content}]' "$CONVERSATION_FILE" > temp.json && mv temp.json "$CONVERSATION_FILE"
+  # Here we call the add_message function from convmanager script
+  add_message "$role" "$content" "$CONVERSATION_DIR"
 }
 
-process_commands() {
-  local content="$1"
-  # Ensure the commandrouter script is in PATH or provide the full path to the script
-  local output=$(commandrouter "$content" 2>&1) # Capture standard error as well
-  elog DEBUG "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
-  echo "$output"
-}
-
+# Function to process commands and append both user and assistant messages
 process_response() {
   local user_input="$1"
+
+  # Create a temporary file for the user to edit the input
+  local temp_file_input=$(mktemp)
+  echo "$user_input" > "$temp_file_input"
+  nvim "$temp_file_input"
+  
+  # Read the edited user input back into a variable
+  user_input=$(<"$temp_file_input")
+
   # Process any commands in the user input
-  user_input=$(process_commands "$user_input")
-  append_to_conversation "user" "$user_input"
-  
-  # Get the updated conversation JSON
-  local conversation_json=$(<"$CONVERSATION_FILE")
-  
-  # Get the response from brainbridge
-  local response=$(brainbridge --conversation "$conversation_json")
-  elog DEBUG "Brainbridge response: $response"
+  local processed_input=$(process_commands "$user_input")
 
-  # Extract the response content from the JSON
-  local response_content=$(echo "$response" | jq -r '.[0].content')
-  temp_file=$(mktemp) # Define the temporary file
-  echo "$response_content" > "$temp_file"
-  nvim "$temp_file"
-  
-  # Read the edited response content back into a variable
-  local refined_content=$(<"$temp_file")
-  elog INFO "Refined content: $refined_content"
+  # Append user message to the conversation
+  append_to_conversation "user" "$processed_input"
 
-  processed_content=$(process_commands "$refined_content")
-  
-  # Append the refined content using jq
-  append_to_conversation "assistant" "$processed_content"
-  
-  # Print the updated conversation
-  jq '.' "$CONVERSATION_FILE"
+  # Simulate getting a response (replace with actual command if needed)
+  local response="This is a simulated response for the user input."
 
-  # Clean up the temporary file
-  rm "$temp_file"
+  # Create a temporary file for the assistant to edit the response
+  local temp_file_response=$(mktemp)
+  echo "$response" > "$temp_file_response"
+  nvim "$temp_file_response"
+  
+  # Read the edited response back into a variable
+  response=$(<"$temp_file_response")
+
+  # Append assistant message to the conversation
+  append_to_conversation "assistant" "$response"
+
+  # Clean up the temporary files
+  rm "$temp_file_input" "$temp_file_response"
 }
+
+# Parse command-line options
+while getopts "vhd:" opt; do
+  case $opt in
+    v) VERBOSITY=$((VERBOSITY+1)) ;;
+    h) show_help; exit 0 ;;
+    d) CONVERSATION_DIR="$OPTARG" ;;
+    *) show_help >&2; exit 1 ;;
+  esac
+done
+
+# Initialize conversation directory or use existing one
+initialize_conversation_directory "$CONVERSATION_DIR"
 
 # Main interaction loop
 interact() {
@@ -82,25 +89,6 @@ interact() {
   done
   elog INFO "Interaction loop ended."
 }
-
-# Parse command-line options
-while getopts "vhf:" opt; do
-  case $opt in
-    v) VERBOSITY=$((VERBOSITY+1)) ;;
-    h) show_help; exit 0 ;;
-    f) CONVERSATION_FILE="$OPTARG" ;;
-    *) show_help >&2; exit 1 ;;
-  esac
-done
-
-# Check for conversation file existence or create it with an initial system message
-if [ ! -f "$CONVERSATION_FILE" ]; then
-  elog INFO "Creating a new conversation file."
-  echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
-  elog INFO "Conversation file initialized at $CONVERSATION_FILE"
-else
-  elog INFO "Using existing conversation file at $CONVERSATION_FILE"
-fi
 
 # Start the interaction loop
 elog INFO "Starting ivim script."
