@@ -33,6 +33,11 @@ handle_command() {
   fi
 }
 
+get_response(){
+  local conversation_json=$(<"$CONVERSATION_FILE")
+  echo "$(brainbridge --conversation "$conversation_json")"
+}
+
 # Main interaction loop
 interact() {
   while true; do
@@ -49,7 +54,7 @@ interact() {
     update_conversation "user" "$user_input"
 
     # Get and refine assistant's response
-    response=$(brainbridge --conversation "$CONVERSATION_FILE")
+    response=$(get_response)
     echo "$response" > "$TMP_FILE"
     nvim "$TMP_FILE"
     refined_response=$(<"$TMP_FILE")
