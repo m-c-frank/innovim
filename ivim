@@ -1,41 +1,119 @@
 #!/bin/bash
 
 TMP_FILE="/tmp/ivim_buffer.txt"
+CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
+VERBOSITY=0
 
+# Logging function
+log() {
+  local level="$1"
+  local message="$2"
+  local level_num
+
+  case "$level" in
+    ERROR) level_num=0 ;;
+    WARN)  level_num=1 ;;
+    INFO)  level_num=2 ;;
+    DEBUG) level_num=3 ;;
+    *)     echo "Unknown log level: $level"; exit 1 ;;
+  esac
+
+  if [[ $VERBOSITY -ge $level_num ]]; then
+    echo "[$level] $message"
+  fi
+}
+
+# Parse options for verbosity level
+while getopts "v" opt; do
+    case $opt in
+        v) VERBOSITY=$((VERBOSITY+1)) ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+    esac
+done
+
+# Function to edit the response using nvim and output the result
 refine_response() {
-    echo "$1" > "$TMP_FILE"
+    log DEBUG "Opening nvim to refine response."
     nvim "$TMP_FILE"
+    log DEBUG "nvim closed, contents of response:"
     cat "$TMP_FILE"
 }
 
+# Function to handle the refined response for commands like run, save, or prompt
 handle_response() {
-    local response="$1"
+    local response=$(<"$TMP_FILE")
+    log DEBUG "Handling response: $response"
     case "$response" in
-        run:*) eval "${response#run:}" ;;
+        run:*)
+            log INFO "Executing run command."
+            eval "${response#run:}"
+            ;;
         save:*)
-            echo "Enter save path:"
-            read -r path
-            echo "${response#save:}" > "$path"
+            local save_path="${response#save:}"
+            log INFO "Saving response to: $save_path"
+            cat "$TMP_FILE" > "$save_path"
             ;;
         prompt:*)
+            log INFO "Prompting for user input..."
             echo "${response#prompt:}"
             read -r user_response
-            echo "You said: $user_response"
+            log DEBUG "User responded with: $user_response"
+            echo "$user_response"
             ;;
-        *) echo "$response" ;;
+        *)
+            log DEBUG "Outputting response: $response"
+            echo "$response"
+            ;;
     esac
 }
 
-interact() {
-    echo "Provide context/goal or type 'exit' to quit:"
-    read -r user_input
-    [ "$user_input" == "exit" ] && exit 0
+# Function to initialize the conversation file if it doesn't exist
+initialize_conversation() {
+    log INFO "Initializing conversation file."
+    log DEBUG '[{"role": "system", "content": "You are a helpful assistant."}] > $CONVERSATION_FILE'
+    echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
+}
 
-    response=$(toolbuilder --mode=assistant --input="$user_input")
-    refined=$(refine_response "$response")
-    handle_response "$refined"
+# Main interaction loop
+interact() {
+    if [ ! -f "$CONVERSATION_FILE" ]; then
+        log WARN "Conversation file not found."
+        initialize_conversation
+    fi
+
+    log INFO "Provide your message or type 'exit' to quit:"
+    read -r user_input
+    log DEBUG "Read user input: $user_input"
+    if [[ "$user_input" == "exit" ]]; then
+        log INFO "Exiting."
+        exit 0
+    fi
+
+    log DEBUG "Appending user input to conversation."
+    conversation_json=$(<"$CONVERSATION_FILE")
+    updated_conversation=$(echo "$conversation_json" | jq --arg user_input "$user_input" '. += [{"role": "user", "content": $user_input}]')
+    log DEBUG "Updated conversation JSON: $updated_conversation"
+
+    log DEBUG "Passing updated conversation to brainbridge command."
+    response_json=$(brainbridge --conversation "$updated_conversation")
+    log DEBUG "Brainbridge response JSON: $response_json"
+
+    response=$(echo "$response_json" | jq -r '.response')
+    log DEBUG "Extracted response: $response"
+
+    echo "$response" > "$TMP_FILE"
+    refined_response=$(refine_response)
+    log DEBUG "Refined response: $refined_response"
+
+    handle_response "$refined_response"
+
+    updated_conversation=$(echo "$updated_conversation" | jq --arg response "$refined_response" '. += [{"role": "assistant", "content": $response}]')
+    echo "$updated_conversation" > "$CONVERSATION_FILE"
+    log DEBUG "Updated conversation saved to file."
 
     interact
 }
 
+# Start the main interaction loop
+log INFO "Starting interaction loop."
 interact
