@@ -7,6 +7,11 @@ TMP_FILE="/tmp/ivim_buffer.txt"
 # Global variable for verbosity level
 EASYLOG_VERBOSITY=0
 
+# Define a easylog function that calls the easylog script with the global verbosity level
+log() {
+  EASYLOG_VERBOSITY=$EASYLOG_VERBOSITY easylog "$@"
+}
+
 # Help message
 show_help() {
   cat << EOF
@@ -49,46 +54,41 @@ get_response(){
 
 # Main interaction loop
 interact() {
-  easylog INFO "Interaction loop started."
+  log INFO "Interaction loop started."
   while true; do
     echo "Provide your command (type 'exit' to quit):"
     read -r user_input
-    easylog INFO "User input: $user_input"
+    log INFO "User input: $user_input"
     if [[ "$user_input" == "exit" ]]; then
-      easylog INFO "User requested to exit."
+      log INFO "User requested to exit."
       break
     fi
 
-    easylog DEBUG "Processing user input."
+    log DEBUG "Processing user input."
     output=$(handle_command "$user_input") # Input is passed with quotes to handle multi-word arguments
     if [[ "$output" ]]; then
-      easylog INFO "Command output processed: $output"
+      log INFO "Command output processed: $output"
     fi
 
-    easylog DEBUG "Updating conversation with user input."
+    log DEBUG "Updating conversation with user input."
     update_conversation "user" "$user_input"
 
-    easylog DEBUG "Fetching and processing response."
+    log DEBUG "Fetching and processing response."
     response=$(get_response)
     echo "$response" > "$TMP_FILE"
 
-    easylog DEBUG "nvim will now open to refine response."
+    log DEBUG "nvim will now open to refine response."
     nvim "$TMP_FILE"
     
     refined_response=$(<"$TMP_FILE")
-    easylog DEBUG "Refined response ready for processing."
+    log DEBUG "Refined response ready for processing."
     
     # Pass the refined response to the command router
     handle_command "$refined_response" 
 
-    easylog INFO "Assistant's response: $refined_response"
+    log INFO "Assistant's response: $refined_response"
   done
-  easylog INFO "Interaction loop ended."
-}
-
-# Alias for easylog with verbosity control
-easylog() {
-  EASYLOG_VERBOSITY=$EASYLOG_VERBOSITY easylog "$@"
+  log INFO "Interaction loop ended."
 }
 
 # Parse command-line options
@@ -105,11 +105,11 @@ done
 # Check for conversation file existence or create it
 if [ ! -f "$CONVERSATION_FILE" ]; then
   echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
-  easylog INFO "Conversation file initialized at $CONVERSATION_FILE"
+  log INFO "Conversation file initialized at $CONVERSATION_FILE"
 else
-  easylog INFO "Using existing conversation file at $CONVERSATION_FILE"
+  log INFO "Using existing conversation file at $CONVERSATION_FILE"
 fi
 
 # Start the interaction loop
-easylog INFO "Starting ivim script."
+log INFO "Starting ivim script."
 interact
