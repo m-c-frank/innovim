@@ -4,6 +4,8 @@
 CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
 VERBOSITY=0
 
+allowed_tools="git ls mkdir tee touch rm cp mv chmod chown wget curl python pip docker"
+
 # Logging function
 log() {
   local level="$1"
@@ -46,8 +48,41 @@ append_to_conversation() {
   jq --arg role "$role" --arg content "$content" '. += [{"role": $role, "content": $content}]' "$CONVERSATION_FILE" > temp.json && mv temp.json "$CONVERSATION_FILE"
 }
 
+
+is_allowed_tool() {
+  if grep -q "^$1\$" <<< "$allowed_tools"; then
+    return 0  # true, the tool is allowed
+  else
+    return 1  # false, the tool is not allowed
+  fi
+}
+
+execute_or_echo_command() {
+  read -r command args <<< "$@"
+  if $is_allowed; then
+    # Execute the command in a new shell instance
+    log DEBUG "Executing command: $command $args"
+    bash -c "$command $args"
+  else
+    # If not recognized, just echo back the input
+    echo "$@"
+  fi
+}
+
+
+# Replace the process_commands function with the new execute_or_echo_command
+process_commands() {
+  local content="$1"
+  local output=$(execute_or_echo_command "$content")
+  echo "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
+  echo "$output"
+}
+
+
 process_response() {
   local user_input="$1"
+  # Process any commands in the user input
+  user_input=$(process_commands "$user_input")
   append_to_conversation "user" "$user_input"
   
   # Get the updated conversation JSON
@@ -66,9 +101,11 @@ process_response() {
   # Read the edited response content back into a variable
   local refined_content=$(<"$temp_file")
   log INFO "Refined content: $refined_content"
+
+  processed_content=$(process_commands "$refined_content")
   
   # Append the refined content using jq
-  append_to_conversation "assistant" "$refined_content"
+  append_to_conversation "assistant" "$processed_content"
   
   # Print the updated conversation
   jq '.' "$CONVERSATION_FILE"
@@ -76,7 +113,6 @@ process_response() {
   # Clean up the temporary file
   rm "$temp_file"
 }
-
 
 # Main interaction loop
 interact() {

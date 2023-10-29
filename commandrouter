@@ -1,38 +1,42 @@
 #!/bin/bash
 
-# This function will perform an action based on the rest of the string
-perform_action() {
-    local action=$1
-    shift # Shift the arguments to the left, removing the first one
-    local rest_of_string="$*"
-    echo "$action on '$rest_of_string'"
+# commandrouter
+# A minimalistic command router for software development tools.
+
+# Define a newline-separated list of allowed tools.
+read -r -d '' allowed_tools << EOM
+git
+ls
+mkdir
+tee
+touch
+rm
+cp
+mv
+chmod
+chown
+wget
+curl
+python
+pip
+docker
+EOM
+
+# Function to check if the command is in the list of allowed tools
+is_allowed_tool() {
+  grep -q "^$1\$" <<< "$allowed_tools"
 }
 
-# Reads the command as the first word of the input string
-read -ra ADDR <<< "$1" # Split input into an array
-command=${ADDR[0]} # The command is the first element
+execute_command() {
+  local command=$1
+  shift # Shift the arguments so that $@ contains only the remaining args
 
-# Create a string of the remaining elements
-rest_of_string="${ADDR[@]:1}" # All elements except the first one
+  if is_allowed_tool "$command"; then
+    $command "$@" # Use $@ to pass all remaining arguments to the command
+  else
+    echo "$command $@" # Echo back the command followed by all its arguments
+  fi
+}
 
-# Outputs the command identifier based on the input and performs the action on the rest of the string
-case "$command" in
-    save)
-        perform_action "save" "$rest_of_string"
-        ;;
-    exec)
-        perform_action "execute" "$rest_of_string"
-        ;;
-    log)
-        perform_action "log" "$rest_of_string"
-        ;;
-    read)
-        perform_action "read" "$rest_of_string"
-        ;;
-    edit)
-        perform_action "edit" "$rest_of_string"
-        ;;
-    *)
-        echo "unknown"
-        ;;
-esac
+# Now use "$@" to pass all arguments to the execute_command function
+execute_command "$@"
