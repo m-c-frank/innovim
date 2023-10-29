@@ -3,7 +3,9 @@
 # Default file paths
 CONVERSATION_FILE="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S").json"
 TMP_FILE="/tmp/ivim_buffer.txt"
-VERBOSITY=0
+
+# Global variable for verbosity level
+EASYLOG_VERBOSITY=0
 
 # Help message
 show_help() {
@@ -16,12 +18,28 @@ Options:
 EOF
 }
 
+# Update conversation file with new entry
+update_conversation() {
+  local role="$1"
+  local content="$2"
+  # Assuming convoupdater is in the PATH or provide the full path to convoupdater script
+  convoupdater "$CONVERSATION_FILE" "$role" "$content"
+}
+
 # Handle command with router and action handler
 handle_command() {
-  local input="$1"
-  easylog DEBUG "Handling command: $input"
-  # Assuming actionhandler is in the PATH or provide the full path to actionhandler script
-  actionhandler "$@"
+  local input="$*"
+  # Call the external command router script with the input
+  # Assuming commandrouter and actionrouter are in the PATH or provide the full path to these scripts
+  local command_output
+  command_output=$(commandrouter "$input")
+  
+  # If commandrouter outputs a known command, it is passed to actionrouter
+  if [[ $command_output != "unknown" ]]; then
+    actionrouter $command_output
+  else
+    echo "Command not recognized by commandrouter."
+  fi
 }
 
 get_response(){
@@ -42,51 +60,50 @@ interact() {
     fi
 
     easylog DEBUG "Processing user input."
-    output=$(handle_command $user_input) # Input is passed without quotes to allow actionhandler to split it into arguments
+    output=$(handle_command "$user_input") # Input is passed with quotes to handle multi-word arguments
     if [[ "$output" ]]; then
       easylog INFO "Command output processed: $output"
     fi
 
     easylog DEBUG "Updating conversation with user input."
-    convoupdater "$CONVERSATION_FILE" "user" "$user_input"
+    update_conversation "user" "$user_input"
 
     easylog DEBUG "Fetching and processing response."
     response=$(get_response)
-    echo "$response" | jq -r '.[0].content' > "$TMP_FILE"
-    
-    # Use editbuf tool to let the user edit the response
-    refined_response=$(editbuf "$(cat "$TMP_FILE")")
-    
-    # Extract 'content' from the refined response
-    content=$(echo "$refined_response")
-    
-    easylog DEBUG "Refined response processed."
-    convoupdater "$CONVERSATION_FILE" "assistant" "$content"
+    echo "$response" > "$TMP_FILE"
 
-    easylog INFO "Assistant's response: $content"
+    easylog DEBUG "nvim will now open to refine response."
+    nvim "$TMP_FILE"
+    
+    refined_response=$(<"$TMP_FILE")
+    easylog DEBUG "Refined response ready for processing."
+    
+    # Pass the refined response to the command router
+    handle_command "$refined_response" 
+
+    easylog INFO "Assistant's response: $refined_response"
   done
   easylog INFO "Interaction loop ended."
+}
+
+# Alias for easylog with verbosity control
+easylog() {
+  EASYLOG_VERBOSITY=$EASYLOG_VERBOSITY easylog "$@"
 }
 
 # Parse command-line options
 while getopts "vhf:" opt; do
   case $opt in
-    v) VERBOSITY=$((VERBOSITY+1)) ;;
+    v) EASYLOG_VERBOSITY=$((EASYLOG_VERBOSITY+1))
+       export EASYLOG_VERBOSITY ;;
     h) show_help; exit 0 ;;
     f) CONVERSATION_FILE="$OPTARG" ;;
     *) show_help >&2; exit 1 ;;
   esac
 done
 
-# Ensure the external scripts are executable and in the PATH
-if ! command -v easylog &> /dev/null || ! command -v convoupdater &> /dev/null || ! command -v editbuf &> /dev/null; then
-    echo "The required tools (easylog, convoupdater, and editbuf) are not in PATH or not executable." >&2
-    exit 1
-fi
-
 # Check for conversation file existence or create it
 if [ ! -f "$CONVERSATION_FILE" ]; then
-  easylog INFO "Creating a new conversation file."
   echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
   easylog INFO "Conversation file initialized at $CONVERSATION_FILE"
 else
