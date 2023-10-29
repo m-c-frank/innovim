@@ -31,47 +31,24 @@ while getopts "v" opt; do
     esac
 done
 
-# Function to edit the response using nvim and output the result
-refine_response() {
-    log DEBUG "Opening nvim to refine response."
-    nvim "$TMP_FILE"
-    log DEBUG "nvim closed, contents of response:"
-    cat "$TMP_FILE"
-}
-
-# Function to handle the refined response for commands like run, save, or prompt
-handle_response() {
-    local response=$(<"$TMP_FILE")
-    log DEBUG "Handling response: $response"
-    case "$response" in
-        run:*)
-            log INFO "Executing run command."
-            eval "${response#run:}"
-            ;;
-        save:*)
-            local save_path="${response#save:}"
-            log INFO "Saving response to: $save_path"
-            cat "$TMP_FILE" > "$save_path"
-            ;;
-        prompt:*)
-            log INFO "Prompting for user input..."
-            echo "${response#prompt:}"
-            read -r user_response
-            log DEBUG "User responded with: $user_response"
-            echo "$user_response"
-            ;;
-        *)
-            log DEBUG "Outputting response: $response"
-            echo "$response"
-            ;;
-    esac
-}
-
 # Function to initialize the conversation file if it doesn't exist
 initialize_conversation() {
     log INFO "Initializing conversation file."
-    log DEBUG '[{"role": "system", "content": "You are a helpful assistant."}] > $CONVERSATION_FILE'
     echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
+    log DEBUG "Conversation file content initialized."
+}
+
+# Function to route command through the Command Router
+route_command() {
+    local user_input="$1"
+    echo "$user_input" | commandrouter
+}
+
+# Function to invoke the appropriate microservice based on the route
+invoke_service() {
+    local service_name="$1"
+    local command="$2"
+    "/path/to/${service_name}" "$command"
 }
 
 # Main interaction loop
@@ -81,37 +58,29 @@ interact() {
         initialize_conversation
     fi
 
-    log INFO "Provide your message or type 'exit' to quit:"
-    read -r user_input
-    log DEBUG "Read user input: $user_input"
-    if [[ "$user_input" == "exit" ]]; then
-        log INFO "Exiting."
-        exit 0
-    fi
+    while true; do
+        log INFO "Provide your message or type 'exit' to quit:"
+        read -r user_input
+        log DEBUG "Read user input: $user_input"
 
-    log DEBUG "Appending user input to conversation."
-    conversation_json=$(<"$CONVERSATION_FILE")
-    updated_conversation=$(echo "$conversation_json" | jq --arg user_input "$user_input" '. += [{"role": "user", "content": $user_input}]')
-    log DEBUG "Updated conversation JSON: $updated_conversation"
+        if [[ "$user_input" == "exit" ]]; then
+            log INFO "Exiting."
+            break
+        fi
 
-    log DEBUG "Passing updated conversation to brainbridge command."
-    response_json=$(brainbridge --conversation "$updated_conversation")
-    log DEBUG "Brainbridge response JSON: $response_json"
+        log DEBUG "Routing command through the Command Router."
+        service_name=$(route_command "$user_input")
 
-    response=$(echo "$response_json" | jq -r '.[0].content')
-    log DEBUG "Extracted response: $response"
+        log DEBUG "Invoking the $service_name service."
+        response=$(invoke_service "$service_name" "$user_input")
+        log DEBUG "Service response: $response"
 
-    echo "$response" > "$TMP_FILE"
-    refined_response=$(refine_response)
-    log DEBUG "Refined response: $refined_response"
-
-    handle_response "$refined_response"
-
-    updated_conversation=$(echo "$updated_conversation" | jq --arg response "$refined_response" '. += [{"role": "assistant", "content": $response}]')
-    echo "$updated_conversation" > "$CONVERSATION_FILE"
-    log DEBUG "Updated conversation saved to file."
-
-    interact
+        log DEBUG "Appending user input and response to conversation."
+        conversation_json=$(<"$CONVERSATION_FILE")
+        updated_conversation=$(echo "$conversation_json" | jq --arg user_input "$user_input" --arg response "$response" '. += [{"role": "user", "content": $user_input}, {"role": "assistant", "content": $response}]')
+        echo "$updated_conversation" > "$CONVERSATION_FILE"
+        log DEBUG "Updated conversation saved to file."
+    done
 }
 
 # Start the main interaction loop

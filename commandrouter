@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Reads command from arguments
+command=$1
+
+# Outputs the command identifier based on the input
+case "$command" in
+    save) echo "save" ;;
+    exec) echo "exec" ;;
+    log) echo "log" ;;
+    read) echo "read" ;;
+    edit) echo "edit" ;;
+    *) echo "unknown" ;;
+esac
