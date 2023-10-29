@@ -39,6 +39,45 @@ Options:
 EOF
 }
 
+# Function to append a message to the conversation
+append_to_conversation() {
+  local role="$1"
+  local content="$2"
+  jq --arg role "$role" --arg content "$content" '. += [{"role": $role, "content": $content}]' "$CONVERSATION_FILE" > temp.json && mv temp.json "$CONVERSATION_FILE"
+}
+
+process_response() {
+  local user_input="$1"
+  append_to_conversation "user" "$user_input"
+  
+  # Get the updated conversation JSON
+  local conversation_json=$(<"$CONVERSATION_FILE")
+  
+  # Get the response from brainbridge
+  local response=$(brainbridge --conversation "$conversation_json")
+  log DEBUG "Brainbridge response: $response"
+
+  # Extract the response content from the JSON
+  local response_content=$(echo "$response" | jq -r '.[0].content')
+  temp_file=$(mktemp) # Define the temporary file
+  echo "$response_content" > "$temp_file"
+  nvim "$temp_file"
+  
+  # Read the edited response content back into a variable
+  local refined_content=$(<"$temp_file")
+  log INFO "Refined content: $refined_content"
+  
+  # Append the refined content using jq
+  append_to_conversation "assistant" "$refined_content"
+  
+  # Print the updated conversation
+  jq '.' "$CONVERSATION_FILE"
+
+  # Clean up the temporary file
+  rm "$temp_file"
+}
+
+
 # Main interaction loop
 interact() {
   log INFO "Interaction loop started."
@@ -46,42 +85,13 @@ interact() {
     echo "Provide your command (type 'exit' to quit):"
     read -r user_input
     log INFO "User input: $user_input"
+    
     if [[ "$user_input" == "exit" ]]; then
       log INFO "User requested to exit."
       break
     fi
 
-    log DEBUG "Passing user input to commandrouter."
-    command_output=$(echo "$user_input" | xargs commandrouter)
-    log DEBUG "Commandrouter output: $command_output"
-    
-    if [[ "$command_output" != "unknown" ]]; then
-      log DEBUG "Making command output editable using editbuf."
-      edited_command_output=$(echo "$command_output" | xargs editbuf)
-      log DEBUG "Edited command output: $edited_command_output"
-      
-      log DEBUG "Passing edited command output to actionhandler."
-      action_output=$(echo "$edited_command_output" | xargs actionhandler)
-      log DEBUG "Actionhandler output: $action_output"
-      
-      log INFO "Updating conversation with action output."
-      convoupdater "$CONVERSATION_FILE" "assistant" "$action_output"
-    else
-      log ERROR "Unknown command: $user_input"
-    fi
-
-    log DEBUG "Fetching response from brainbridge."
-    conversation_json=$(<"$CONVERSATION_FILE")
-    response=$(brainbridge --conversation "$conversation_json")
-    log DEBUG "Brainbridge response: $response"
-
-    # Make the response editable using editbuf and update the conversation
-    log DEBUG "Making brainbridge response editable using editbuf."
-    refined_response=$(echo "$response" | xargs editbuf)
-    log INFO "Refined response: $refined_response"
-
-    log INFO "Updating conversation with refined response."
-    convoupdater "$CONVERSATION_FILE" "assistant" "$refined_response"
+    process_response "$user_input"
   done
   log INFO "Interaction loop ended."
 }
@@ -96,10 +106,10 @@ while getopts "vhf:" opt; do
   esac
 done
 
-# Check for conversation file existence or create it with an empty list
+# Check for conversation file existence or create it with an initial system message
 if [ ! -f "$CONVERSATION_FILE" ]; then
   log INFO "Creating a new conversation file."
-  echo '[]' > "$CONVERSATION_FILE"
+  echo '[{"role": "system", "content": "You are a helpful assistant."}]' > "$CONVERSATION_FILE"
   log INFO "Conversation file initialized at $CONVERSATION_FILE"
 else
   log INFO "Using existing conversation file at $CONVERSATION_FILE"
