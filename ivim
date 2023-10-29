@@ -1,5 +1,8 @@
 #!/bin/bash
 
+source easylog
+source convmanager
+
 # Default directory path for conversation
 CONVERSATION_DIR="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S")"
 VERBOSITY=0
@@ -36,24 +39,31 @@ process_response() {
   user_input=$(<"$temp_file_input")
 
   # Process any commands in the user input
-  local processed_input=$(process_commands "$user_input")
+  local processed_input=$(execute_or_echo "$user_input")
 
   # Append user message to the conversation
   append_to_conversation "user" "$processed_input"
 
   # Simulate getting a response (replace with actual command if needed)
-  local response="This is a simulated response for the user input."
+  # Get the response from brainbridge
+  local conversation_json="{\"role\":\"user\",\"content\":\"$processed_input\"}" # This should be the actual JSON structure used
+  local response=$(brainbridge --conversation "$conversation_json")
+  elog DEBUG "Brainbridge response: $response"
 
-  # Create a temporary file for the assistant to edit the response
-  local temp_file_response=$(mktemp)
-  echo "$response" > "$temp_file_response"
+  # Extract the response content from the JSON
+  local response_content=$(echo "$response" | jq -r '.[0].content')
+  local temp_file_response=$(mktemp) # Define the temporary file
+  echo "$response_content" > "$temp_file_response"
   nvim "$temp_file_response"
   
-  # Read the edited response back into a variable
-  response=$(<"$temp_file_response")
+  # Read the edited response content back into a variable
+  local refined_content=$(<"$temp_file_response")
+  elog INFO "Refined content: $refined_content"
+
+  local processed_response=$(execute_or_echo "$refined_content")
 
   # Append assistant message to the conversation
-  append_to_conversation "assistant" "$response"
+  append_to_conversation "assistant" "$processed_response"
 
   # Clean up the temporary files
   rm "$temp_file_input" "$temp_file_response"

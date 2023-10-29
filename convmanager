@@ -1,5 +1,7 @@
 #!/bin/bash
 
+source easylog
+
 # Initialize default verbosity
 VERBOSITY=0
 
