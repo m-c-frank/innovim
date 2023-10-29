@@ -98,7 +98,7 @@ interact() {
     response_json=$(brainbridge --conversation "$updated_conversation")
     log DEBUG "Brainbridge response JSON: $response_json"
 
-    response=$(echo "$response_json" | jq -r '.response')
+    response=$(echo "$response_json" | jq -r '.[0].content')
     log DEBUG "Extracted response: $response"
 
     echo "$response" > "$TMP_FILE"
