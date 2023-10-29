@@ -1,0 +1,24 @@
+#!/bin/bash
+# convoupdater - A generic utility to update conversation logs.
+
+CONVERSATION_LOCATION="$1"
+ROLE="$2"
+CONTENT="$3"
+
+if [[ -z "$CONVERSATION_LOCATION" || -z "$ROLE" || -z "$CONTENT" ]]; then
+  echo "Usage: convoupdater <conversation_location> <role> <content>" >&2
+  exit 1
+fi
+
+# Future enhancements can include checks for the type of location (file, database, etc.)
+# For now, we assume it's a file
+
+jq --arg role "$ROLE" --arg content "$CONTENT" \
+   '. += [{"role": $role, "content": $content}]' "$CONVERSATION_LOCATION" > tmp.$$ && mv tmp.$$ "$CONVERSATION_LOCATION"
+
+if [ $? -ne 0 ]; then
+  echo "Failed to update conversation at $CONVERSATION_LOCATION." >&2
+  exit 1
+fi
+
+echo "Conversation updated at $CONVERSATION_LOCATION with: role=$ROLE, content=$CONTENT"

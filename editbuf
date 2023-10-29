@@ -1,0 +1,23 @@
+#!/bin/bash
+# editflow - A tool to edit a string input using nvim and output the result.
+
+# Check if input is provided
+if [ "$#" -eq 0 ]; then
+  echo "Usage: editflow <input string>" >&2
+  exit 1
+fi
+
+# Create a temporary file
+TMP_FILE=$(mktemp)
+
+# Save the input string to the temporary file
+echo "$1" > "$TMP_FILE"
+
+# Open nvim with the temporary file
+nvim "$TMP_FILE"
+
+# Output the edited string
+cat "$TMP_FILE"
+
+# Clean up the temporary file
+rm "$TMP_FILE"
