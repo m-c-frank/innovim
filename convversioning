@@ -1,47 +1,85 @@
 #!/bin/bash
 
-source easylog
+# convversioning: A minimal command-line interface for version control systems.
 
-# convversioning: A microservice interface to a version control system (Git).
+source easylog.sh
 
-# Function to initialize a Git repository
-initialize_repository() {
-  local dir=$1
-  if [ ! -d "$dir/.git" ]; then
-    git -C "$dir" init
-    elog "INFO" "Git repository initialized in $dir"
-  fi
+# Default version control system
+VCS="git"
+
+# Help function
+help() {
+  echo "convversioning: Version control interface."
+  echo "Commands:"
+  echo "  init DIR               - Initialize version control in directory."
+  echo "  branch DIR INDEX       - Branch from a specific message index."
+  echo "  add DIR FILE MSG       - Add message to version control."
+  echo "  switch DIR BRANCH      - Switch to a branch."
+  echo "  merge DIR SOURCE       - Merge a branch into the current."
+  echo "  tree DIR               - Print the commit tree."
 }
 
-# Function to commit a new file to the repository
-commit_file() {
+# Initialize version control repository
+init() {
+  local dir=$1
+  [ ! -d "$dir/.git" ] && git -C "$dir" init && elog "INFO" "Repo initialized at $dir"
+}
+
+# Create a branch from a message index
+branch() {
+  local dir=$1
+  local index=$2
+  local branch_name="msg_$index"
+  git -C "$dir" checkout -b "$branch_name" "$(git -C "$dir" rev-list --max-parents=0 HEAD | sed -n "${index}p")"
+  elog "INFO" "Branch $branch_name created from message $index"
+}
+
+# Add a message to version control
+add() {
   local dir=$1
   local file=$2
-  local message=$3
+  local msg=$3
+  git -C "$dir" add "$file" && git -C "$dir" commit -m "$msg" && elog "INFO" "Message added: $msg"
+}
 
-  git -C "$dir" add "$file"
-  git -C "$dir" commit -m "$message"
-  elog "INFO" "File $file committed to Git with message: $message"
+# Switch to a branch
+switch() {
+  local dir=$1
+  local branch=$2
+  git -C "$dir" checkout "$branch" && elog "INFO" "Switched to branch $branch"
+}
+
+# Merge a branch into the current
+merge() {
+  local dir=$1
+  local source=$2
+  git -C "$dir" merge "$source" && elog "INFO" "Merged branch $source"
+}
+
+# Print the entire commit tree
+tree() {
+  local dir=$1
+  git -C "$dir" log --graph --all --oneline
 }
 
 # Main function to parse arguments and call the appropriate function
 main() {
-  local command=$1
+  local cmd=$1
+  if [ -z "$cmd" ]; then
+    help
+    return
+  fi
   shift
 
-  case "$command" in
-    init)
-      initialize_repository "$@"
-      ;;
-    commit)
-      commit_file "$@"
-      ;;
-    *)
-      elog "ERROR" "Unknown command: $command"
-      exit 1
-      ;;
+  case "$cmd" in
+    init) init "$@" ;;
+    branch) branch "$@" ;;
+    add) add "$@" ;;
+    switch) switch "$@" ;;
+    merge) merge "$@" ;;
+    tree) tree "$@" ;;
+    *) elog "ERROR" "Unknown command: $cmd" && help ;;
   esac
 }
 
-# Call main with all arguments passed to the script
 main "$@"
