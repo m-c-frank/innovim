@@ -2,7 +2,7 @@
 
 # convversioning: A minimal command-line interface for version control systems.
 
-source easylog.sh
+source easylog
 
 # Default version control system
 VCS="git"
@@ -22,7 +22,15 @@ help() {
 # Initialize version control repository
 init() {
   local dir=$1
-  [ ! -d "$dir/.git" ] && git -C "$dir" init && elog "INFO" "Repo initialized at $dir"
+  if [ ! -d "$dir" ]; then
+    mkdir -p "$dir" && elog "INFO" "Directory created at $dir" || { elog "ERROR" "Failed to create directory at $dir"; exit 1; }
+  fi
+
+  if [ ! -d "$dir/.git" ]; then
+    git -C "$dir" init && elog "INFO" "Git repository initialized in $dir" || elog "ERROR" "Failed to initialize git repository in $dir"
+  else
+    elog "INFO" "Git repository already initialized in $dir"
+  fi
 }
 
 # Create a branch from a message index

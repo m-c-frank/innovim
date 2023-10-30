@@ -1,113 +1,86 @@
 #!/bin/bash
 
 source easylog
-source convmanager
 
-# Default directory path for conversation
-CONVERSATION_DIR="/tmp/ivim_conversation_$(date "+%Y%m%d%H%M%S")"
 VERBOSITY=0
+CONVERSATION_ID=$(date "+%Y%m%d%H%M%S")
 
-# Help message
 show_help() {
-  cat << EOF
-Usage: ivim [options]
+    cat << EOF
+Usage: $(basename "$0") [options]
 Options:
-  -h        Show help message.
-  -v        Increase verbosity of easylog messages.
-  -d DIR    Specify a conversation directory.
+    -h        Show help message.
+    -v        Increase verbosity of easylog messages.
+    -i ID     Specify a conversation ID. (Optional, default is current timestamp)
 EOF
 }
 
-# Replace the process_commands function with the new execute_or_echo
 process_commands() {
-  local content="$1"
-  local output=$(execute_or_echo "$content")
-  echo "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
-  echo "$output"
+    local content="$1"
+    local output=$(commandrouter "$content" 2>&1)
+    elog DEBUG "Commandrouter output: '$output'" >&2
+    echo "$output"
 }
 
-# Function to append a message to the conversation using convmanager
 append_to_conversation() {
-  local role="$1"
-  local content="$2"
-  # Here we call the add_message function from convmanager script
-  add_message "$role" "$content" "$CONVERSATION_DIR"
+    local role="$1"
+    local content="$2"
+    # Assuming convmanager takes -d for directory and -a for appending a message
+    convmanager -d "/tmp/$CONVERSATION_ID" -a "$role" "$content"
 }
 
-# Function to process commands and append both user and assistant messages
 process_response() {
-  local user_input="$1"
-
-  # Create a temporary file for the user to edit the input
-  local temp_file_input=$(mktemp)
-  echo "$user_input" > "$temp_file_input"
-  nvim "$temp_file_input"
-  
-  # Read the edited user input back into a variable
-  user_input=$(<"$temp_file_input")
-
-  # Process any commands in the user input
-  local processed_input=$(process_command "$user_input")
-
-  # Append user message to the conversation
-  append_to_conversation "user" "$processed_input"
-
-  # Simulate getting a response (replace with actual command if needed)
-  # Get the response from brainbridge
-  local conversation_json=$(generate_json_conversation "$CONVERSATION_DIR")
-  local response=$(brainbridge --conversation "$conversation_json")
-  elog DEBUG "Brainbridge response: $response"
-
-  # Extract the response content from the JSON
-  local response_content=$(echo "$response" | jq -r '.[0].content')
-  local temp_file_response=$(mktemp) # Define the temporary file
-  echo "$response_content" > "$temp_file_response"
-  nvim "$temp_file_response"
-  
-  # Read the edited response content back into a variable
-  local refined_content=$(<"$temp_file_response")
-  elog INFO "Refined content: $refined_content"
-
-  local processed_response=$(process_command "$refined_content")
-
-  # Append assistant message to the conversation
-  append_to_conversation "assistant" "$processed_response"
-
-  # Clean up the temporary files
-  rm "$temp_file_input" "$temp_file_response"
+    local user_input="$1"
+    user_input=$(process_commands "$user_input")
+    append_to_conversation "user" "$user_input"
+    local conversation_json=$(convmanager -d "/tmp/$CONVERSATION_ID" -s)
+    local response=$(brainbridge --conversation "$conversation_json")
+    elog DEBUG "Brainbridge response: $response"
+    local response_content=$(echo "$response" | jq -r '.[0].content')
+    local temp_file_response=$(mktemp)
+    echo "$response_content" > "$temp_file_response"
+    nvim "$temp_file_response"
+    local refined_content=$(<"$temp_file_response")
+    elog INFO "Refined content: $refined_content"
+    elog INFO "Processing response through command router."
+    local processed_response=$(process_commands "$refined_content")
+    append_to_conversation "assistant" "$processed_response"
+    elog INFO "Response appended to conversation."
+    rm "$temp_file_response"
 }
 
-# Parse command-line options
-while getopts "vhd:" opt; do
-  case $opt in
-    v) VERBOSITY=$((VERBOSITY+1)) ;;
-    h) show_help; exit 0 ;;
-    d) CONVERSATION_DIR="$OPTARG" ;;
-    *) show_help >&2; exit 1 ;;
-  esac
+interact() {
+    elog INFO "Interaction loop started."
+    while true; do
+    	local conversation_json=$(convmanager -d "/tmp/$CONVERSATION_ID" -s)
+	echo $conversation_json
+	echo "Provide your command (type 'exit' to quit):"
+        read -r user_input
+        elog INFO "User input: $user_input"
+        if [[ "$user_input" == "exit" ]]; then
+            elog INFO "User requested to exit."
+            break
+        fi
+        local temp_file_input=$(mktemp)
+        echo "$user_input" > "$temp_file_input"
+        nvim "$temp_file_input"
+        user_input=$(<"$temp_file_input")
+        process_response "$user_input"
+        rm "$temp_file_input"
+    done
+    elog INFO "Interaction loop ended."
+}
+
+while getopts "vhi:" opt; do
+    case $opt in
+        v) VERBOSITY=$((VERBOSITY+1)) ;;
+        h) show_help; exit 0 ;;
+        i) CONVERSATION_ID="$OPTARG" ;;
+        *) show_help >&2; exit 1 ;;
+    esac
 done
 
-# Initialize conversation directory or use existing one
-initialize_conversation_directory "$CONVERSATION_DIR"
+shift $((OPTIND -1))
 
-# Main interaction loop
-interact() {
-  elog INFO "Interaction loop started."
-  while true; do
-    echo "Provide your command (type 'exit' to quit):"
-    read -r user_input
-    elog INFO "User input: $user_input"
-    
-    if [[ "$user_input" == "exit" ]]; then
-      elog INFO "User requested to exit."
-      break
-    fi
-
-    process_response "$user_input"
-  done
-  elog INFO "Interaction loop ended."
-}
-
-# Start the interaction loop
-elog INFO "Starting ivim script."
+elog INFO "Using conversation ID: $CONVERSATION_ID"
 interact
