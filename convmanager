@@ -1,6 +1,9 @@
 #!/bin/bash
 
+# convmanager: A tool for managing conversations with logging and JSON representation.
+
 source easylog
+source convversioning
 
 # Initialize default verbosity
 VERBOSITY=0
@@ -8,11 +11,14 @@ VERBOSITY=0
 # Help message
 show_help() {
   cat << EOF
-Usage: $(basename "$0") [options]
+Usage: $(basename "$0") [options] [-a ROLE MESSAGE] [-s] [-r]
 Options:
   -h        Show help message.
   -v        Increase verbosity of log messages.
   -d DIR    Specify a conversation directory (mandatory).
+  -a ROLE MESSAGE  Add a message as a specified role.
+  -s        Show the current state of the conversation.
+  -r        Generate a report of the conversation in JSON format.
 EOF
 }
 
@@ -26,16 +32,20 @@ initialize_conversation_directory() {
   fi
 }
 
-# Function to create a new file with a message in the conversation directory
+# Function to add a message to the conversation directory
 add_message() {
   local role=$1
-  local content=$2
-  local dir=$3
-  local index=$(find "$dir" -type f -name '*.txt' | wc -l)
+  local content="${@:2}" # all arguments after the first one
+  local dir=$CONVERSATION_DIR
+  local index=$(find "$dir" -maxdepth 1 -type f -name '*.txt' | wc -l)
   ((index++)) # Increment file index
 
-  printf "%s" "$content" > "${dir}/$(printf "%03d" "$index")_${role}.txt"
-  elog INFO "New file generated for role: $role"
+  local filename="${dir}/$(printf "%03d" "$index")_${role}.txt"
+  printf "%s\n" "$content" > "$filename"
+  elog INFO "New file generated for role: $role with message: $content"
+
+  # Use convversioning to commit the new message
+  convversioning commit "$dir" "$filename" "Messageindex $index - $role"
 }
 
 # Function to generate a JSON array of messages from the conversation files
@@ -44,33 +54,48 @@ generate_json_conversation() {
   local json_array="["
 
   # Sort files by index and role
-  local sorted_files=($(find "$dir" -type f -name '*.txt' -print0 | sort -z -t_ -k1n,1))
-  
+  local sorted_files=($(find "$dir" -maxdepth 1 -type f -name '*.txt' -print0 | sort -z -t_ -k1n,1))
+
   for file in "${sorted_files[@]}"; do
     local basename=${file##*/}
     local role=${basename#*_}
     role=${role%.*}
     local content=$(<"$file")
-    
+
     # Append to JSON array
     json_array+="{\"role\": \"$role\", \"content\": $(jq -Rs . <<< "$content")},"
   done
-  
+
+  # Remove the last comma and close the JSON array bracket
   json_array="${json_array%,}]"
-  echo "$json_array" > "$dir/conversation.json"
-  elog INFO "JSON conversation generated"
+  echo "$json_array"
+}
+
+# Function to show the current state of the conversation as JSON
+show_conversation() {
+  local dir=$CONVERSATION_DIR
+  local json_output=$(generate_json_conversation "$dir")
+  echo "$json_output" | jq '.'
 }
 
 # Main function
 main() {
   local CONVERSATION_DIR
+  local ADD_MESSAGE=false
+  local SHOW_CONVERSATION=false
+  local GENERATE_REPORT=false
+  local ROLE
+  local MESSAGE
 
   # Parse command-line options
-  while getopts "vh:d:" opt; do
+  while getopts "vhd:a:sr" opt; do
     case $opt in
       v) VERBOSITY=$((VERBOSITY+1)) ;;
       h) show_help; exit 0 ;;
       d) CONVERSATION_DIR="$OPTARG" ;;
+      a) ADD_MESSAGE=true; ROLE="$OPTARG"; shift 2; MESSAGE="$@"; ;;
+      s) SHOW_CONVERSATION=true ;;
+      r) GENERATE_REPORT=true ;;
       *) show_help >&2; exit 1 ;;
     esac
   done
@@ -82,7 +107,18 @@ main() {
   fi
 
   initialize_conversation_directory "$CONVERSATION_DIR"
-  generate_json_conversation "$CONVERSATION_DIR"
+
+  if $ADD_MESSAGE; then
+    add_message "$ROLE" "$MESSAGE"
+  fi
+
+  if $SHOW_CONVERSATION; then
+    show_conversation
+  fi
+
+  if $GENERATE_REPORT; then
+    generate_json_conversation
+  fi
 }
 
 # Invoke the main function with all the arguments

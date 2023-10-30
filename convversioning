@@ -1,0 +1,47 @@
+#!/bin/bash
+
+source easylog
+
+# convversioning: A microservice interface to a version control system (Git).
+
+# Function to initialize a Git repository
+initialize_repository() {
+  local dir=$1
+  if [ ! -d "$dir/.git" ]; then
+    git -C "$dir" init
+    elog "INFO" "Git repository initialized in $dir"
+  fi
+}
+
+# Function to commit a new file to the repository
+commit_file() {
+  local dir=$1
+  local file=$2
+  local message=$3
+
+  git -C "$dir" add "$file"
+  git -C "$dir" commit -m "$message"
+  elog "INFO" "File $file committed to Git with message: $message"
+}
+
+# Main function to parse arguments and call the appropriate function
+main() {
+  local command=$1
+  shift
+
+  case "$command" in
+    init)
+      initialize_repository "$@"
+      ;;
+    commit)
+      commit_file "$@"
+      ;;
+    *)
+      elog "ERROR" "Unknown command: $command"
+      exit 1
+      ;;
+  esac
+}
+
+# Call main with all arguments passed to the script
+main "$@"

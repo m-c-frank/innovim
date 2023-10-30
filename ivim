@@ -18,6 +18,14 @@ Options:
 EOF
 }
 
+# Replace the process_commands function with the new execute_or_echo
+process_commands() {
+  local content="$1"
+  local output=$(execute_or_echo "$content")
+  echo "Commandrouter output: '$output'" >&2  # Debug: Print the output to standard error for debugging
+  echo "$output"
+}
+
 # Function to append a message to the conversation using convmanager
 append_to_conversation() {
   local role="$1"
@@ -39,14 +47,14 @@ process_response() {
   user_input=$(<"$temp_file_input")
 
   # Process any commands in the user input
-  local processed_input=$(execute_or_echo "$user_input")
+  local processed_input=$(process_command "$user_input")
 
   # Append user message to the conversation
   append_to_conversation "user" "$processed_input"
 
   # Simulate getting a response (replace with actual command if needed)
   # Get the response from brainbridge
-  local conversation_json="{\"role\":\"user\",\"content\":\"$processed_input\"}" # This should be the actual JSON structure used
+  local conversation_json=$(generate_json_conversation "$CONVERSATION_DIR")
   local response=$(brainbridge --conversation "$conversation_json")
   elog DEBUG "Brainbridge response: $response"
 
@@ -60,7 +68,7 @@ process_response() {
   local refined_content=$(<"$temp_file_response")
   elog INFO "Refined content: $refined_content"
 
-  local processed_response=$(execute_or_echo "$refined_content")
+  local processed_response=$(process_command "$refined_content")
 
   # Append assistant message to the conversation
   append_to_conversation "assistant" "$processed_response"
